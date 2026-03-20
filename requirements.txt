@@ -1,0 +1,7 @@
+streamlit
+pandas
+dnspython
+python-whois
+requests
+openpyxl
+tldextract
