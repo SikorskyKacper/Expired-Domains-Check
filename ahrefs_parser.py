@@ -25,12 +25,29 @@ def parse_ahrefs_file(file_obj):
     file_name = file_obj.name.lower()
     
     if file_name.endswith('.csv'):
-        # Ahrefs often exports in UTF-16 for Excel compatibility, or UTF-8
-        try:
-            df = pd.read_csv(file_obj, encoding='utf-8')
-        except UnicodeDecodeError:
+        # Ahrefs exports can be UTF-8 or UTF-16, and use various separators
+        encodings_to_try = [('utf-8', ','), ('utf-8', ';'), ('utf-8', '\t'), 
+                            ('utf-16', '\t'), ('utf-16', ','), ('utf-16', ';')]
+        
+        df = None
+        for enc, sep in encodings_to_try:
+            try:
+                file_obj.seek(0)
+                temp_df = pd.read_csv(file_obj, encoding=enc, sep=sep, on_bad_lines='skip')
+                if len(temp_df.columns) > 1:
+                    df = temp_df
+                    break
+            except Exception:
+                continue
+                
+        if df is None:
+            # Fallback to default if all failed (might actually be 1 column)
             file_obj.seek(0)
-            df = pd.read_csv(file_obj, encoding='utf-16')
+            try:
+                df = pd.read_csv(file_obj, encoding='utf-8')
+            except Exception:
+                file_obj.seek(0)
+                df = pd.read_csv(file_obj, encoding='utf-16', sep='\t')
     elif file_name.endswith('.xlsx'):
         df = pd.read_excel(file_obj)
     else:
@@ -73,7 +90,7 @@ def parse_ahrefs_file(file_obj):
 
     # Apply extraction
     df['Root Domain'] = df[url_col].apply(extract_domain)
-    clean_df = df.dropna(subset=['Root Domain'])
+    clean_df = df.dropna(subset=['Root Domain']).copy()
     
     dr_out_col = 'DR'
     traffic_out_col = 'Traffic'
